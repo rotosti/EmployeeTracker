@@ -17,7 +17,7 @@ const startIntroQuestionaire = () => {
             type: 'list',
             message: 'What would you like to do?',
             choices: ['View All Departments', 'View All Roles', 'View All Employees', 'Add a Department', 'Add a Role', 'Add a new Employee', 'Update a Department',
-                      'Update a Role', 'Remove a Department', 'Remove a Role', 'Exit']
+                      'Update a Role', `Update Employee's Role`, 'Remove a Department', 'Remove a Role', 'Exit']
         }])
         .then((answer) => {
             switch(answer.userChoice) {
@@ -44,6 +44,9 @@ const startIntroQuestionaire = () => {
                     break;
                 case 'Update a Role':
                     updateRole();
+                    break;
+                case `Update Employee's Role`:
+                    updateEmployeeRole();
                     break;
                 case 'Remove a Department':
                     deleteADepartment();
@@ -395,7 +398,7 @@ const addAnEmployee = () => {
                         const roleList = result.map(role => role.title);
                         success(roleList);
                     })
-                }).then((deptList) => {return deptList});
+                }).then((roleList) => {return roleList});
                 return p;
         }}, {
             name: 'managerConfirm',
@@ -443,7 +446,66 @@ const viewAllEmployees = () => {
     })
 }
 
-
+const updateEmployeeRole = () => {
+    inquirer
+        .prompt([{
+            name:'employeeSelect',
+            type:'list',
+            message: 'Which employee needs their role updated?',
+            choices: async () => {
+                let p = await new Promise((success, fail) => {
+                    connection.query(`SELECT first_name, last_name FROM employee;`, (e, result) => {
+                        if (e) throw e;
+                        const personList = result.map(person => `${person.first_name} ${person.last_name}`);
+                        success(personList);
+                    })
+                }).then((personList) => {return personList});
+                return p;
+        }},{
+            name: 'deptSelect',
+            type: 'list',
+            message: 'What department is the new role in?',
+            choices: async () => {
+                let p = await new Promise((success, fail) => {
+                    connection.query('SELECT dept_name FROM department', (e, result) => {
+                        if (e) throw e;
+                        const deptList = result.map(dept => dept.dept_name);
+                        success(deptList);
+                    })
+                }).then((deptList) => {return deptList});
+                return p;
+        }}, {
+            name: 'roleSelect',
+            type: 'list',
+            message: `What is the employee's new title?`,
+            choices: async (answers) => {
+                let p = await new Promise((success, fail) => {
+                    connection.query(`SELECT title FROM role WHERE department_id=(SELECT id FROM department WHERE dept_name = '${answers.deptSelect}')`, (e, result) => {
+                        if (e) throw e;
+                        const roleList = result.map(role => role.title);
+                        success(roleList);
+                    })
+            }).then((roleList) => {return roleList});
+            return p;
+        }}, {
+            name:'confirm',
+            type:'list',
+            message: (answers) => `You would like to change ${answers.employeeSelect}'s role to ${answers.roleSelect}?`,
+            choices: ['Yes', 'No'],
+        }])
+        .then((answers) => {
+            if (answers.confirm === "No") {
+                startIntroQuestionaire();
+            } else {
+                let name = answers.employeeSelect.split(' ')
+                connection.query(`UPDATE employee SET role_id = (SELECT id FROM role WHERE title='${answers.roleSelect}') WHERE first_name='${name[0]}' AND last_name='${name[1]}'`, (e, result) => {
+                    if (e) throw e;
+                    console.log(`\nSuccessfully updated ${answers.employeeSelect}'s role to ${answers.roleSelect}.\n`);
+                    startIntroQuestionaire();
+                })
+            }
+        })
+}
 
 // exit function
 const exit = () => {
