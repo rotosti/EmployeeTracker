@@ -16,7 +16,8 @@ const startIntroQuestionaire = () => {
             name: 'userChoice',
             type: 'list',
             message: 'What would you like to do?',
-            choices: ['View All Departments', 'View All Roles', 'Add a Department', 'Add a Role', 'Update a Department', 'Update a Role', 'Remove a Department', 'Exit']
+            choices: ['View All Departments', 'View All Roles', 'Add a Department', 'Add a Role', 'Add a new Employee', 'Update a Department',
+                      'Update a Role', 'Remove a Department', 'Remove a Role', 'Exit']
         }])
         .then((answer) => {
             switch(answer.userChoice) {
@@ -32,6 +33,9 @@ const startIntroQuestionaire = () => {
                 case 'Add a Role':
                     addARole();
                     break;
+                case 'Add a new Employee':
+                    addAnEmployee();
+                    break;
                 case 'Update a Department':
                     updateADepartment();
                     break;
@@ -40,6 +44,9 @@ const startIntroQuestionaire = () => {
                     break;
                 case 'Remove a Department':
                     deleteADepartment();
+                    break;
+                case 'Remove a Role':
+                    deleteRole();
                     break;
                 case 'Exit':
                     exit();
@@ -102,7 +109,7 @@ const addADepartment = () => {
                 startIntroQuestionaire();
             });
         })
-};
+}
 
 const deleteADepartment = () => {
     inquirer
@@ -302,7 +309,126 @@ const updateRole = () => {
 }
 
 const deleteRole = () => {
-    
+    inquirer
+        .prompt([{
+            name: 'userSelectedDept',
+            type: 'list',
+            message: 'In which department is the role you would like to delete located?',
+            choices: async () => {
+                let p = await new Promise((success, fail) => {
+                    connection.query('SELECT dept_name FROM department', (e, result) => {
+                        if (e) throw e;
+                        const deptList = result.map(dept => dept.dept_name);
+                        success(deptList);
+                    })
+                }).then((deptList) => {return deptList});
+                return p;
+            }},{
+            name: 'roleSelect',
+            type: 'list',
+            message: 'Which role would you like to delete?',
+            choices: async (answers) => {
+                let p = await new Promise((success, fail) => {
+                    connection.query(`SELECT title FROM role WHERE department_id=(SELECT id FROM department WHERE dept_name = '${answers.userSelectedDept}')`, (e, result) => {
+                        if (e) throw e;
+                        const roleList = result.map(role => role.title);
+                        success(roleList);
+                    })
+                }).then((deptList) => {return deptList});
+                return p;
+            }},{
+                name: 'confirm',
+                type: 'list',
+                message: (answers) => `Are you sure you want to delete ${answers.roleSelect} from ${answers.userSelectedDept}?`,
+                choices: ['Yes', 'No']
+            }])
+            .then ((answers) => {
+                if (answers.confirm === 'No') {
+                    startIntroQuestionaire()
+                } else {
+                    connection.query(`DELETE FROM role WHERE title = '${answers.roleSelect}' AND department_id = (SELECT id FROM department WHERE dept_name = '${answers.userSelectedDept}')`, (e, result) => {
+                        if (e) throw e;
+                        console.log(`\nSuccessfully removed ${answers.roleSelect} from ${answers.userSelectedDept}.\n`)
+                        startIntroQuestionaire();
+                    })
+                }
+            })
+}
+// end role section
+
+// start employee section
+const addAnEmployee = () => {
+    inquirer
+        .prompt([{
+            name: 'firstName',
+            type: 'input',
+            message: `Enter in the employee's first name:`
+        },{
+            name: 'lastName',
+            type: 'input',
+            message: `Enter in the employee's last name:`
+        },{
+            name: 'deptSelect',
+            type: 'list',
+            message: 'What department hired this employee?',
+            choices: async () => {
+                let p = await new Promise((success, fail) => {
+                    connection.query('SELECT dept_name FROM department', (e, result) => {
+                        if (e) throw e;
+                        const deptList = result.map(dept => dept.dept_name);
+                        success(deptList);
+                    })
+                }).then((deptList) => {return deptList});
+                return p;
+        }}, {
+            name: 'roleSelect',
+            type: 'list',
+            message: `What is the employee's title?`,
+            choices: async (answers) => {
+                let p = await new Promise((success, fail) => {
+                    connection.query(`SELECT title FROM role WHERE department_id=(SELECT id FROM department WHERE dept_name = '${answers.deptSelect}')`, (e, result) => {
+                        if (e) throw e;
+                        const roleList = result.map(role => role.title);
+                        success(roleList);
+                    })
+                }).then((deptList) => {return deptList});
+                return p;
+        }}, {
+            name: 'managerConfirm',
+            type: 'list',
+            message: (answers) => `Does ${answers.firstName} ${answers.lastName} have a manager?`,
+            choices: ['Yes', 'No']
+        }, {
+            name: 'managerSelect',
+            type: 'list',
+            message: (answers) => `Who is ${answers.firstName} ${answers.lastName} manager?`,
+            choices: async (answers) => {
+                let p = await new Promise((success, fail) => {
+                    connection.query(`SELECT first_name, last_name FROM employee INNER JOIN role ON employee.role_id = role.id ` + 
+                                     `INNER JOIN department on role.department_id = department.id WHERE department.dept_name = '${answers.deptSelect}';`, (e, result) => {
+                        if (e) throw e;
+                        const personList = result.map(person => `${person.first_name} ${person.last_name}`);
+                        success(personList);
+                    })
+                }).then((personList) => {return personList});
+                return p;
+            },
+            when: (answers) => answers.managerConfirm === 'Yes'
+        }])
+        .then((answers) => {
+            if (answers.managerConfirm === 'Yes') {
+                let manager = answers.managerSelect.split(' ');
+                connection.query(`SELECT id INTO @A FROM employee WHERE first_name='${manager[0]}' AND last_name='${manager[1]}'; INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${answers.firstName}', '${answers.lastName}', (SELECT id FROM role WHERE title='${answers.roleSelect}'), @A)`, (e, result) => {
+                if (e) throw e;
+                console.log(`\nSuccessfully added new employee ${answers.firstName} ${answers.lastName} to ${answers.deptSelect} as a ${answers.roleSelect}.\n`);
+                startIntroQuestionaire();
+            })} else {
+               connection.query(`INSERT INTO employee (first_name, last_name, role_id) VALUES ("${answers.firstName}","${answers.lastName}",(SELECT id FROM role WHERE title='${answers.roleSelect}'))`, (e, result) => {
+                if (e) throw e;
+                console.log(`\nSuccessfully added new employee ${answers.firstName} ${answers.lastName} to ${answers.deptSelect} as a ${answers.roleSelect}.\n`);
+                startIntroQuestionaire();  
+            })}
+        })
 }
 
 // exit function
