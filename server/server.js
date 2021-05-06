@@ -16,7 +16,7 @@ const startIntroQuestionaire = () => {
             name: 'userChoice',
             type: 'list',
             message: 'What would you like to do?',
-            choices: ['View All Departments', 'View All Roles', 'Add a Department', 'Add a Role', 'Add a new Employee', 'Update a Department',
+            choices: ['View All Departments', 'View All Roles', 'View All Employees', 'Add a Department', 'Add a Role', 'Add a new Employee', 'Update a Department',
                       'Update a Role', 'Remove a Department', 'Remove a Role', 'Exit']
         }])
         .then((answer) => {
@@ -26,6 +26,9 @@ const startIntroQuestionaire = () => {
                     break;
                 case 'View All Roles':
                     viewAllRoles();
+                    break;
+                case 'View All Employees':
+                    viewAllEmployees();
                     break;
                 case 'Add a Department':
                     addADepartment();
@@ -357,6 +360,7 @@ const deleteRole = () => {
 // end role section
 
 // start employee section
+// NEEDS Fix
 const addAnEmployee = () => {
     inquirer
         .prompt([{
@@ -417,6 +421,7 @@ const addAnEmployee = () => {
         }])
         .then((answers) => {
             if (answers.managerConfirm === 'Yes') {
+                // Bug on SQL QUERY string
                 let manager = answers.managerSelect.split(' ');
                 connection.query(`SELECT id INTO @A FROM employee WHERE first_name='${manager[0]}' AND last_name='${manager[1]}'; INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${answers.firstName}', '${answers.lastName}', (SELECT id FROM role WHERE title='${answers.roleSelect}'), @A)`, (e, result) => {
                 if (e) throw e;
@@ -430,6 +435,15 @@ const addAnEmployee = () => {
             })}
         })
 }
+
+const viewAllEmployees = () => {
+    connection.query('SELECT * FROM employee', (e, result) => {
+        console.table(result);
+        startIntroQuestionaire();
+    })
+}
+
+
 
 // exit function
 const exit = () => {
